@@ -3,6 +3,8 @@ import pytesseract
 from PIL import Image
 from llama_cpp import Llama
 import time
+import os
+from datetime import datetime
 
 css="""
 #col-container {max-width: 500px; margin-left: auto; margin-right: auto;}
@@ -11,7 +13,7 @@ css="""
 """
 
 title = """
-<div style="text-align: center;max-width: 700px;">
+<div style="text-align: center;max-width: 10000px;">
     <h1>Amani LLM</h1>
     <p style="text-align: center;">You can chat with Amani AI LLM! <br />
     Amani AI helps you to have a better understanding from your Amani AI profile information! <br /> 
@@ -19,44 +21,39 @@ title = """
 </div>
 """
 
+
 llm = Llama(model_path="/home/ceyda/Desktop/llm-mistral/test/models/model.gguf", n_ctx=4000, n_threads=2, chat_format="chatml",n_gpu_layers=20,device= 'cuda:0')
 
-def add_kyc_data():
-    prompt_kyc = """
+def fail_or_success(confidence, threshold):
+    if round(float(confidence*100), 2) < threshold:
+        return "Fail"
+    elif round(float(confidence*100), 2) >= threshold:
+        return "Success"
+
+def add_kyc_data(identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude):
+    prompt_kyc = f"""
             My KYC Information profile checks and user information are listed below:
 
-            Email :woskiva@sharklasers.com verified
-            Phone :+905352961076 verified
+            Email: woskiva@sharklasers.com verified
+            Phone: +905352961076 verified
             Government System database Check: passed
             Turkish ID Latest: passed
             Selfie: passed
             Address: Passed
-            Identification:
-                Threshold: 70% Confidence: 100.00%
-                Success
-            Document Liveness:
-                Threshold: 70% Confidence: 100.00%
-                Success
-            NFC:
-                Threshold: 0% Confidence: 0.00%
-                Fail
-            Biometrics Check:
-                Threshold: 80% Confidence: 100.00%
-                Success
-            Biometric Liveness:
-                Threshold: 80% Confidence: 100.00%
-                Success
-            Face Match:
-                Threshold: 75% Confidence: 50.00%
-                Fail
+            Identification: Threshold: 70%, Confidence: {round(float(identification*100), 2)}%, {fail_or_success(identification, 70)}
+            Document Liveness: Threshold: 70%, Confidence: {round(float(document_liveness*100), 2)}%, {fail_or_success(document_liveness, 70)}
+            NFC: Threshold: 70%, Confidence: {round(float(nfc_check*100), 2)}%, {fail_or_success(nfc_check, 70)}
+            Biometrics Check: Threshold: 80%, Confidence: {round(float(biometrics_check*100), 2)}%, {fail_or_success(biometrics_check, 80)}
+            Biometric Liveness: Threshold: 80%, Confidence: {round(float(biometric_liveness*100), 2)}%, {fail_or_success(biometric_liveness, 80)}
+            Face Match: Threshold: 75%, Confidence: {round(float(face_match*100), 2)}%, {fail_or_success(face_match, 75)}
             Used:
-                IP Address: 198.52.129.197
-                Device: ID4b973ac37effd84b
-                OS: android
-                Brand: HUAWEI
-            Location Data
-                Latitude: 41.10301571015984
-                Longtitude: 29.018631657569884
+                \tIP Address: {ip_address}
+                \tDevice: {device}
+                \tOS: {os_ph}
+                \tBrand: {brand}
+            Location Data:
+                \tLatitude: {latitude}
+                \tLongtitude: {longtitude}
             AML: passed in all these list 
                 Ofac SDN
                 EU List
@@ -67,83 +64,73 @@ def add_kyc_data():
             """
     return prompt_kyc
 
-def add_questionnaire_data():
-    prompt_questionnaire = """
+def add_questionnaire_data(purpose, amount_of_transaction, employment_status, nationality, industry, payment_source, referred, pep_confirmation, platform, warning_confirmation):
+    prompt_questionnaire = f"""
             My questionnaire results are:
            
-            Bizden coin alım/satım yapma amacınız nedir?
+            What is your purpose for buying/selling coins from us?
 
-            Satın aldığınız coinler ile yapacağınız işlemler neler?
+            What are the transactions you will do with the coins you buy?
+            \t{purpose}
 
-            Uzun vadeli yatırım
+            Approximately how much do you expect to transact with us this year?
+            If it is not exact, you can choose an approximate amount.
+            \t{amount_of_transaction}
 
-            Bu yıl bizimle yaklaşık oalrak ne kadarlık bir işlem yapmayı bekliyorsunuz?
+            What is your current occupation?
+            Please indicate your current employment status.
+            \t{employment_status}
 
-            Eğer kesin değilse yaklaşık bir tutar seçebilirsiniz.
+            What is your nationality?
+            \t{nationality}
 
-            $100k-$300k USD
+            Which industry do you work in?
+            Please indicate the business industries in which you work.
+            \t{industry}
 
-            Şu anki mesleğiniz nedir?
+            Where does the money you use to make payments come from?
+            Please tell us your source of funds, i.e. how you get the money in your account. You can choose more than one option if your funds come from different sources.
+            \t{payment_source}
 
-            Lütfen mevcut istihdam durumunuzu belirtin.
+            Are you referred (to buy cryptocurrency) by someone you met online?
+            \t{referred}
 
-            Çalışan
+            PEP and Sanctions Approval
+            By verifying with us, please confirm that you are not a Politically Exempt Person (PEP), a close associate or family member of a PEP.
+            \t{pep_confirmation}
 
-            Uyruğunuz nedir?
+            Which platform did you find us on?
+            \t{platform}
 
-            Turkish
-
-            Hangi endüstride çalışıyorsunuz?
-
-            Lütfen görev aldığınız iş endüstrilerini belirtiniz.
-
-            Diğer
-
-            Bilgi Teknolojileri
-
-            Ödeme yapmak için kullandığınız para nereden geliyor?
-
-            Lütfen bize fon kaynağınızı belirtin, diğer bir deyişle hesabınızdaki parayı nasıl elde ettiğinizi. Fonlarınız farklı kaynaklardan geliyorsa birden fazla seçenek seçebilirsiniz.
-
-            İş Maaşı
-
-            Sizi, çevrimiçi tanıştığınız birisi (kripto para satın almak için) yönlendiriyor mu?
-
-            HAYIR
-
-            PEP ve Yaptırımlar Onayı
-
-            Bizimle doğrulayarak, lütfen Politik Ayrıcalıklı Kişi (PEP) olmadığınızı, bir PEP'in yakın ilişkisi veya ailesi olmadığınızı onaylayın.
-
-            Bir PEP (Politik Ayrıcalıklı Kişi) olmadığımı ve herhangi bir yaptırım altında olmadığımı onaylıyorum.
-
-            Bizi hangi platformdan buldunuz?
-
-            Binance
-
-            DOLANDIRICILIK UYARISI!
-
-            Kripto para alanında pek çok dolandırıcılık vakası bulunmaktadır ve müşterilerimizin %99'unun tüm paralarını kaybettikleri gözlemlenmiştir.
-
-            Uyarıyı okudum, coinlerimi Binance/Huobi/Bybit/OKX dışında başka bir yere çekmemi isteyen bir kişinin dolandırıcılık dışında mantıklı bir amacı olmadığını anlıyorum. 
+            FRAUD ALERT!
+            \tThere are many cases of scams in the cryptocurrency space and %99 of our clients have lost all their coins.
+            \t{warning_confirmation}
     """
     return prompt_questionnaire
 
+global extracted_ocrs
+extracted_ocrs = []
+
 def add_text(history, text, image):
+    message = ""
     if image is None and text is not None:
         image_upload_status = "You can load your image and get information from it..."
     if image is not None:
         ocr_text = pytesseract.image_to_string(Image.open(image))
 
-        message = "Here is my document optical character recognition (OCR) result: \n\n"
+        if ocr_text not in extracted_ocrs:
+            extracted_ocrs.append(ocr_text)
+            message = "Here is my document optical character recognition (OCR) result: \n\n"
+            message = message + ocr_text + "\n" + text
 
-        message = message + ocr_text + text
+        elif ocr_text in extracted_ocrs:
+            message = text
 
         image_upload_status = "Image uploaded and extracted information"
         
         text = message
     history = history + [(text, "")]
-    return history, "", image_upload_status
+    return history, "", image_upload_status, extracted_ocrs
 
 def generate(history):
     print("Generating response...")
@@ -179,45 +166,81 @@ def generate(history):
     
     #print(f"FORMATTED PROMPT FOR LLM =====> {formatted_prompt}")
 
-    stream_response = llm.create_chat_completion(messages=formatted_prompt, temperature=0.3, max_tokens=512, stream=True)
+    stream_response = llm.create_chat_completion(messages=formatted_prompt, temperature=0.5, max_tokens=512, stream=True)
     for chunk in stream_response:
         if len(chunk['choices'][0]["delta"]) != 0 and "content" in chunk['choices'][0]["delta"]:
             history[-1][1]  += chunk['choices'][0]["delta"]["content"]
             time.sleep(0.05)
             yield history
 
-with gr.Blocks(css=css) as demo:
-    gr.HTML(title)
-    with gr.Row():
-        with gr.Column(elem_id="col-container", scale=3):
-            with gr.Column():
-                image_upload = gr.Image(type="filepath", label="Upload Image for OCR")
-                with gr.Row():
-                    image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
-                add_kyc_information = gr.Button("Add KYC Information")
-                add_questionnaire_information = gr.Button("Add questionnaire results")
-        with gr.Column(elem_id="col-container-chatbot", scale=8):
-            chatbot = gr.Chatbot(elem_id='chatbot',
-                                   avatar_images=["user.png", "amani.jpeg"], 
-                                   bubble_full_width=False, 
-                                   show_label=False, 
-                                   show_copy_button=True, 
-                                   likeable=True)
-            # create button
-            txt = gr.Textbox(label="Chat", placeholder="Type your message...")
-            # submit button
-            submit_btn = gr.Button("Send Message")
-            # pipeline
-    txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, chatbot, chatbot, api_name="bot_response"
-    )
-    add_kyc_information.click(add_kyc_data, None, txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, chatbot, chatbot, api_name="bot_response"
-    )
-    add_questionnaire_information.click(add_questionnaire_data, None, txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, chatbot, chatbot, api_name="bot_response"
-    )
+current_date = datetime.now()
+strVersion = current_date.strftime("%m%d%Y-%H.%M.%S")
+CONV_PATH = os.path.join(f"./{strVersion}-chat_history.json", )
 
+with open(CONV_PATH, 'w') as conversation_log:
+    with gr.Blocks(css=css) as demo:
+        gr.HTML(title)
+        with gr.Row():
+            with gr.Column(elem_id="col-container", scale=3):
+                with gr.Column():
+                    image_upload = gr.Image(type="filepath", label="Upload Image for OCR")
+                    with gr.Row():
+                        image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
+                    add_kyc_information = gr.Button("Add KYC Information")
+                    add_questionnaire_information = gr.Button("Add questionnaire results")
+                    with gr.Column():
+                        with gr.Accordion("KYC inputs", open=False) as kyc_row:
+                                identification = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.01, interactive=True, label="Idetification Confidence")
+                                document_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Document Liveness Confidence")
+                                nfc_check = gr.Slider(minimum=0.0, maximum=1.0, value=0.0, step=0.01, interactive=True, label="NFC Check Confidence")
+                                biometrics_check = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Biometrics Check Confidence")
+                                biometric_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=0.85, step=0.01, interactive=True, label="Biometrics Liveness Confidence")
+                                face_match = gr.Slider(minimum=0.0, maximum=1.0, value=0.89, step=0.01, interactive=True, label="Face Match Confidence")
+                                ip_address = gr.Textbox(label="IP Address", value="198.52.129.197")
+                                device = gr.Textbox(label="Device", value="ID4b973ac37effd84b")
+                                os_ph = gr.Textbox(label="Operating System", value="android")
+                                brand = gr.Textbox(label="Brand", value="HUAWEI")
+                                latitude = gr.Textbox(label="Latitude", value="41.10301571015984")
+                                longtitude = gr.Textbox(label="Longtitude", value="29.018631657569884")
+                        with gr.Accordion("Questionnaire inputs", open=False) as questionnaire_row:
+                                purpose = gr.Textbox(label="Transactions", value="Long term investment")
+                                amount_of_transaction = gr.Textbox(label="Amont of transaction", value="$100k-$300k USD")
+                                employment_status = gr.Textbox(label="Employment Status", value="Employee")
+                                nationality = gr.Textbox(label="Nationality", value="Turkish")
+                                industry = gr.Textbox(label="Industry you work", value="Other, Information Technology")
+                                payment_source = gr.Textbox(label="Payment resource", value="Work salary")
+                                referred = gr.Textbox(label="Are you referred by someone", value="NO")
+                                pep_confirmation = gr.TextArea(label="PEP confirmation", value="I confirm that I am not a PEP (Politically Exempt Person) and am not under any sanctions.")
+                                platform = gr.Textbox(label="Which platform did you find us", value="Binance")
+                                warning_confirmation = gr.TextArea(label="Did you read the warnings and accpet them?", value="I read the warning, I understand that a person who asks me to withdraw my coins somewhere other than Binance/Huobi/Bybit/OKX has no logical purpose other than fraud. ")
+            with gr.Column(elem_id="col-container-chatbot", scale=8):
+                chatbot = gr.Chatbot(elem_id='chatbot',
+                                       avatar_images=["user.png", "amani.jpeg"], 
+                                       bubble_full_width=False, 
+                                       show_label=False, 
+                                       show_copy_button=True, 
+                                       likeable=True)
+                # create button
+                txt = gr.Textbox(label="Chat", placeholder="Type your message...")
+                # submit button
+                submit_btn = gr.Button("Send Message")
+                # pipeline
+            with gr.Column(elem_id="example-questions", scale=5):
+                gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"]], inputs=[image_upload, txt])
+
+        txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+            generate, chatbot, chatbot, api_name="bot_response"
+        )
+        txt_msg = submit_btn.click(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+            generate, chatbot, chatbot, api_name="bot_response"
+        )
+        add_kyc_information.click(add_kyc_data, [identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+            generate, chatbot, chatbot, api_name="bot_response"
+        )
+        add_questionnaire_information.click(add_questionnaire_data, [purpose, amount_of_transaction, employment_status, nationality, industry, payment_source, referred, pep_confirmation, platform, warning_confirmation], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+            generate, chatbot, chatbot, api_name="bot_response"
+        )
+        print(chatbot)
 
 demo.queue()
 demo.launch()
