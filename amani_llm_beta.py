@@ -22,7 +22,7 @@ title = """
 """
 
 
-llm = Llama(model_path="/home/ceyda/Desktop/llm-mistral/test/models/model.gguf", n_ctx=4000, n_threads=2, chat_format="chatml",n_gpu_layers=20,device= 'cuda:0')
+llm = Llama(model_path="/home/ceyda/Desktop/amani/my_experiments/amani-llm-beta/models/model.gguf", n_ctx=4000, n_threads=2, chat_format="chatml",n_gpu_layers=20,device= 'cuda:0')
 
 def fail_or_success(confidence, threshold):
     if round(float(confidence*100), 2) < threshold:
