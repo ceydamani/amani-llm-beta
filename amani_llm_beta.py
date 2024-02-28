@@ -4,7 +4,7 @@ from PIL import Image
 from llama_cpp import Llama
 import time
 import os
-from datetime import datetime
+import json
 
 css="""
 #col-container {max-width: 500px; margin-left: auto; margin-right: auto;}
@@ -22,7 +22,7 @@ title = """
 """
 
 
-llm = Llama(model_path="/home/ceyda/Desktop/amani/my_experiments/amani-llm-beta/models/model.gguf", n_ctx=4000, n_threads=2, chat_format="chatml",n_gpu_layers=20,device= 'cuda:0')
+llm = Llama(model_path="./model.gguf", n_ctx=4000, n_threads=2, chat_format="chatml",n_gpu_layers=20,device= 'cuda:0')
 
 def fail_or_success(confidence, threshold):
     if round(float(confidence*100), 2) < threshold:
@@ -108,6 +108,14 @@ def add_questionnaire_data(purpose, amount_of_transaction, employment_status, na
     """
     return prompt_questionnaire
 
+def ask_summarized_kyc_profile():
+    prompt = "Can you summarize my KYC (Know Your Customer) profile, according to my KYC profile information?"
+    return prompt, "system_prompt_summary"
+
+def ask_cdd_risk_analysis():
+    prompt = "Can you perform CDD (Customer Due Diligence) risk analysis according to my KYC profile information and Questionnaire results?"
+    return prompt, "system_prompt_risk_analysis"
+
 global extracted_ocrs
 extracted_ocrs = []
 
@@ -117,14 +125,18 @@ def add_text(history, text, image):
         image_upload_status = "You can load your image and get information from it..."
     if image is not None:
         ocr_text = pytesseract.image_to_string(Image.open(image))
-
-        if ocr_text not in extracted_ocrs:
+        if len(extracted_ocrs) != 0: 
+            if ocr_text != extracted_ocrs[-1]:
+                extracted_ocrs.append(ocr_text)
+                message = "Here is my document optical character recognition (OCR) result: \n\n"
+                message = message + ocr_text + "\n" + text
+            elif ocr_text == extracted_ocrs[-1]:
+                message = text
+        elif len(extracted_ocrs) == 0: 
             extracted_ocrs.append(ocr_text)
             message = "Here is my document optical character recognition (OCR) result: \n\n"
             message = message + ocr_text + "\n" + text
 
-        elif ocr_text in extracted_ocrs:
-            message = text
 
         image_upload_status = "Image uploaded and extracted information"
         
@@ -132,31 +144,19 @@ def add_text(history, text, image):
     history = history + [(text, "")]
     return history, "", image_upload_status, extracted_ocrs
 
-def generate(history):
+def load_prompts():
+    prompt_path = os.path.join(os.path.dirname(__file__), "system_prompt.json")
+    with open(prompt_path, 'r') as file:
+        data = json.load(file)
+    return data
+
+def generate(history, prompt_key):
     print("Generating response...")
     # Use your existing system_prompt here
     # PROMPT ENGINEERING
-    system_prompt = """
-            You are an assistant developed by Amani AI. You will help the user to better explain the validated KYC (Know Your Customer) information obtained by Amani AI.
-            If user asks about who you are give one brief sentence about your purpose which is helping users about Amani AI created products and services. 
-            
-            If user asks information about Amani AI, here is brief information about Amani AI; Amani AI is a RegTech company licensed in Dubai's DIFC, specializing in AI-powered identity verification and 
-            biometrics for various sectors, including finance, telecoms, hospitality, travel, HR, transportation, and security. Founded in 2018 by CEO Hamid Khan, CTO Hazem Abdullah, and COO Hamdi Kellecioglu, 
-            it offers flexible deployment options and employs a skilled team of engineers with expertise in machine learning, identity verification, artificial intelligence, biometrics,
-            anti-money laundering, Know Your Customer (KYC), document management, facial recognition, document validation, customer screening, background checking, 
-            compliance, fraud prevention, age verification, and KYC processes.
-            
-            [INST]
-            Translate the questionnaire answer to English if they written in different language.
-            If user asks about their KYC profile summary; 
-                Summarize user's KYC profile as paragraph only using the KYC profile information, if profile has failed or overwritten validation step highlight (write it bold) it like a warning. 
-            If user asks about their Customer Due Diligence (CDD) risk analysis; you should explain the overall risk for the profile from the user's KYC profile information and questionnaire answers. 
-                For CDD risk analysis give user their risk in type (low-mid-high) for each step in both KYC profile and questionnaire and briefly explain. 
-            If user asks how can they approve their profile review the profile and give short feedback (approve or reject) according to their risk score.
-            [/INST]
-    """
+    prompts = load_prompts()
+    system_prompt = prompts[prompt_key]
     message = history[-1][0]
-    #print(f"MESSAGE ====> {message}")
     formatted_prompt = [{"role": "system", "content": system_prompt}]
 
     for user_prompt, bot_response  in history:
@@ -173,74 +173,77 @@ def generate(history):
             time.sleep(0.05)
             yield history
 
-current_date = datetime.now()
-strVersion = current_date.strftime("%m%d%Y-%H.%M.%S")
-CONV_PATH = os.path.join(f"./{strVersion}-chat_history.json", )
-
-with open(CONV_PATH, 'w') as conversation_log:
-    with gr.Blocks(css=css) as demo:
-        gr.HTML(title)
-        with gr.Row():
-            with gr.Column(elem_id="col-container", scale=3):
+with gr.Blocks(css=css) as demo:
+    gr.HTML(title)
+    with gr.Row():
+        with gr.Column(elem_id="col-container", scale=3):
+            with gr.Column():
+                image_upload = gr.Image(type="filepath", label="Upload Image for OCR")
+                with gr.Row():
+                    image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
+                add_kyc_information = gr.Button("Add KYC Information")
+                add_questionnaire_information = gr.Button("Add questionnaire results")
                 with gr.Column():
-                    image_upload = gr.Image(type="filepath", label="Upload Image for OCR")
-                    with gr.Row():
-                        image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
-                    add_kyc_information = gr.Button("Add KYC Information")
-                    add_questionnaire_information = gr.Button("Add questionnaire results")
-                    with gr.Column():
-                        with gr.Accordion("KYC inputs", open=False) as kyc_row:
-                                identification = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.01, interactive=True, label="Idetification Confidence")
-                                document_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Document Liveness Confidence")
-                                nfc_check = gr.Slider(minimum=0.0, maximum=1.0, value=0.0, step=0.01, interactive=True, label="NFC Check Confidence")
-                                biometrics_check = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Biometrics Check Confidence")
-                                biometric_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=0.85, step=0.01, interactive=True, label="Biometrics Liveness Confidence")
-                                face_match = gr.Slider(minimum=0.0, maximum=1.0, value=0.89, step=0.01, interactive=True, label="Face Match Confidence")
-                                ip_address = gr.Textbox(label="IP Address", value="198.52.129.197")
-                                device = gr.Textbox(label="Device", value="ID4b973ac37effd84b")
-                                os_ph = gr.Textbox(label="Operating System", value="android")
-                                brand = gr.Textbox(label="Brand", value="HUAWEI")
-                                latitude = gr.Textbox(label="Latitude", value="41.10301571015984")
-                                longtitude = gr.Textbox(label="Longtitude", value="29.018631657569884")
-                        with gr.Accordion("Questionnaire inputs", open=False) as questionnaire_row:
-                                purpose = gr.Textbox(label="Transactions", value="Long term investment")
-                                amount_of_transaction = gr.Textbox(label="Amont of transaction", value="$100k-$300k USD")
-                                employment_status = gr.Textbox(label="Employment Status", value="Employee")
-                                nationality = gr.Textbox(label="Nationality", value="Turkish")
-                                industry = gr.Textbox(label="Industry you work", value="Other, Information Technology")
-                                payment_source = gr.Textbox(label="Payment resource", value="Work salary")
-                                referred = gr.Textbox(label="Are you referred by someone", value="NO")
-                                pep_confirmation = gr.TextArea(label="PEP confirmation", value="I confirm that I am not a PEP (Politically Exempt Person) and am not under any sanctions.")
-                                platform = gr.Textbox(label="Which platform did you find us", value="Binance")
-                                warning_confirmation = gr.TextArea(label="Did you read the warnings and accpet them?", value="I read the warning, I understand that a person who asks me to withdraw my coins somewhere other than Binance/Huobi/Bybit/OKX has no logical purpose other than fraud. ")
-            with gr.Column(elem_id="col-container-chatbot", scale=8):
-                chatbot = gr.Chatbot(elem_id='chatbot',
-                                       avatar_images=["user.png", "amani.jpeg"], 
-                                       bubble_full_width=False, 
-                                       show_label=False, 
-                                       show_copy_button=True, 
-                                       likeable=True)
-                # create button
-                txt = gr.Textbox(label="Chat", placeholder="Type your message...")
-                # submit button
-                submit_btn = gr.Button("Send Message")
-                # pipeline
-            with gr.Column(elem_id="example-questions", scale=5):
-                gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"]], inputs=[image_upload, txt])
-
-        txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-            generate, chatbot, chatbot, api_name="bot_response"
-        )
-        txt_msg = submit_btn.click(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-            generate, chatbot, chatbot, api_name="bot_response"
-        )
-        add_kyc_information.click(add_kyc_data, [identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-            generate, chatbot, chatbot, api_name="bot_response"
-        )
-        add_questionnaire_information.click(add_questionnaire_data, [purpose, amount_of_transaction, employment_status, nationality, industry, payment_source, referred, pep_confirmation, platform, warning_confirmation], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-            generate, chatbot, chatbot, api_name="bot_response"
-        )
-        print(chatbot)
+                    with gr.Accordion("KYC inputs", open=False) as kyc_row:
+                            identification = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.01, interactive=True, label="Idetification Confidence")
+                            document_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Document Liveness Confidence")
+                            nfc_check = gr.Slider(minimum=0.0, maximum=1.0, value=0.0, step=0.01, interactive=True, label="NFC Check Confidence")
+                            biometrics_check = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Biometrics Check Confidence")
+                            biometric_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=0.85, step=0.01, interactive=True, label="Biometrics Liveness Confidence")
+                            face_match = gr.Slider(minimum=0.0, maximum=1.0, value=0.89, step=0.01, interactive=True, label="Face Match Confidence")
+                            ip_address = gr.Textbox(label="IP Address", value="198.52.129.197")
+                            device = gr.Textbox(label="Device", value="ID4b973ac37effd84b")
+                            os_ph = gr.Textbox(label="Operating System", value="android")
+                            brand = gr.Textbox(label="Brand", value="HUAWEI")
+                            latitude = gr.Textbox(label="Latitude", value="41.10301571015984")
+                            longtitude = gr.Textbox(label="Longtitude", value="29.018631657569884")
+                    with gr.Accordion("Questionnaire inputs", open=False) as questionnaire_row:
+                            purpose = gr.Textbox(label="Transactions", value="Long term investment")
+                            amount_of_transaction = gr.Textbox(label="Amont of transaction", value="$100k-$300k USD")
+                            employment_status = gr.Textbox(label="Employment Status", value="Employee")
+                            nationality = gr.Textbox(label="Nationality", value="Turkish")
+                            industry = gr.Textbox(label="Industry you work", value="Other, Information Technology")
+                            payment_source = gr.Textbox(label="Payment resource", value="Work salary")
+                            referred = gr.Textbox(label="Are you referred by someone", value="NO")
+                            pep_confirmation = gr.TextArea(label="PEP confirmation", value="I confirm that I am not a PEP (Politically Exempt Person) and am not under any sanctions.")
+                            platform = gr.Textbox(label="Which platform did you find us", value="Binance")
+                            warning_confirmation = gr.TextArea(label="Did you read the warnings and accpet them?", value="I read the warning, I understand that a person who asks me to withdraw my coins somewhere other than Binance/Huobi/Bybit/OKX has no logical purpose other than fraud. ")
+                with gr.Row(elem_id="add-sum-button"):
+                    summarize_btn = gr.Button("Summarize KYC profile")
+                    risk_analysis_btn = gr.Button("Create CDD risk analysis")
+        with gr.Column(elem_id="col-container-chatbot", scale=8):
+            chatbot = gr.Chatbot(elem_id='chatbot',
+                                   avatar_images=["user.png", "amani.jpeg"], 
+                                   bubble_full_width=False, 
+                                   show_label=False, 
+                                   show_copy_button=True, 
+                                   likeable=True)
+            # create button
+            txt = gr.Textbox(label="Chat", placeholder="Type your message...")
+            # submit button
+            submit_btn = gr.Button("Send Message")
+            # pipeline
+        with gr.Column(elem_id="example-questions", scale=5): 
+            gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"], ["./example_documents/PHL_ID_0_F.png", "Can you give me the person's name and date of birth of this document's owner?"] ], inputs=[image_upload, txt])
+    prompt_key = gr.Textbox(value="system_prompt", container=False, visible=False)
+    txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
+    txt_msg = submit_btn.click(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
+    add_kyc_information.click(add_kyc_data, [identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
+    add_questionnaire_information.click(add_questionnaire_data, [purpose, amount_of_transaction, employment_status, nationality, industry, payment_source, referred, pep_confirmation, platform, warning_confirmation], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
+    summarize_btn.click(ask_summarized_kyc_profile, outputs=[txt, prompt_key]).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
+    risk_analysis_btn.click(ask_cdd_risk_analysis, outputs=[txt, prompt_key]).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    )
 
 demo.queue()
 demo.launch()
