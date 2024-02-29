@@ -183,6 +183,8 @@ with gr.Blocks(css=css) as demo:
                     image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
                 add_kyc_information = gr.Button("Add KYC Information")
                 add_questionnaire_information = gr.Button("Add questionnaire results")
+                summarize_btn = gr.Button("Summarize KYC profile")
+                risk_analysis_btn = gr.Button("Create CDD risk analysis")
                 with gr.Column():
                     with gr.Accordion("KYC inputs", open=False) as kyc_row:
                             identification = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.01, interactive=True, label="Idetification Confidence")
@@ -208,9 +210,6 @@ with gr.Blocks(css=css) as demo:
                             pep_confirmation = gr.TextArea(label="PEP confirmation", value="I confirm that I am not a PEP (Politically Exempt Person) and am not under any sanctions.")
                             platform = gr.Textbox(label="Which platform did you find us", value="Binance")
                             warning_confirmation = gr.TextArea(label="Did you read the warnings and accpet them?", value="I read the warning, I understand that a person who asks me to withdraw my coins somewhere other than Binance/Huobi/Bybit/OKX has no logical purpose other than fraud. ")
-                with gr.Row(elem_id="add-sum-button"):
-                    summarize_btn = gr.Button("Summarize KYC profile")
-                    risk_analysis_btn = gr.Button("Create CDD risk analysis")
         with gr.Column(elem_id="col-container-chatbot", scale=8):
             chatbot = gr.Chatbot(elem_id='chatbot',
                                    avatar_images=["user.png", "amani.jpeg"], 
@@ -224,7 +223,7 @@ with gr.Blocks(css=css) as demo:
             submit_btn = gr.Button("Send Message")
             # pipeline
         with gr.Column(elem_id="example-questions", scale=5): 
-            gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"], ["./example_documents/PHL_ID_0_F.png", "Can you give me the person's name and date of birth of this document's owner?"] ], inputs=[image_upload, txt])
+            gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"], ["./example_documents/PHL_ID_0_F.png", "Can you summarize this document for me?"] ], inputs=[image_upload, txt])
     prompt_key = gr.Textbox(value="system_prompt", container=False, visible=False)
     txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
         generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
