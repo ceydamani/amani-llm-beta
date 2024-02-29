@@ -166,7 +166,7 @@ def generate(history, prompt_key):
     
     #print(f"FORMATTED PROMPT FOR LLM =====> {formatted_prompt}")
 
-    stream_response = llm.create_chat_completion(messages=formatted_prompt, temperature=0.5, max_tokens=512, stream=True)
+    stream_response = llm.create_chat_completion(messages=formatted_prompt, temperature=0.4, max_tokens=512, stream=True)
     for chunk in stream_response:
         if len(chunk['choices'][0]["delta"]) != 0 and "content" in chunk['choices'][0]["delta"]:
             history[-1][1]  += chunk['choices'][0]["delta"]["content"]
