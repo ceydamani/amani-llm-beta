@@ -34,12 +34,12 @@ def add_kyc_data(email, email_check, phone, phone_check, gsd_check, id_check, se
     prompt_kyc = f"""
             My KYC Information profile checks and user information are listed below:
 
-            Email: {email} {email_check}
-            Phone: {phone} {phone_check}
+            Email: {email} Email Verification: {email_check}
+            Phone: {phone} Phone verification: {phone_check}
             Government System database Check: {gsd_check}
-            Turkish ID Latest: {id_check}
-            Selfie: {selfie_check}
-            Address: {address_check}
+            Turkish ID Latest Check: {id_check}
+            Selfie Check: {selfie_check}
+            Address Check: {address_check}
             Identification: Threshold: 70%, Confidence: {round(float(identification*100), 2)}%, {fail_or_success(identification, 70)}
             Document Liveness: Threshold: 70%, Confidence: {round(float(document_liveness*100), 2)}%, {fail_or_success(document_liveness, 70)}
             NFC: Threshold: 70%, Confidence: {round(float(nfc_check*100), 2)}%, {fail_or_success(nfc_check, 70)}
