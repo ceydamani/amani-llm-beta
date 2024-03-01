@@ -30,16 +30,16 @@ def fail_or_success(confidence, threshold):
     elif round(float(confidence*100), 2) >= threshold:
         return "Success"
 
-def add_kyc_data(identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude):
+def add_kyc_data(email, email_check, phone, phone_check, gsd_check, id_check, selfie_check, address_check, identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude):
     prompt_kyc = f"""
             My KYC Information profile checks and user information are listed below:
 
-            Email: woskiva@sharklasers.com verified
-            Phone: +905352961076 verified
-            Government System database Check: passed
-            Turkish ID Latest: passed
-            Selfie: passed
-            Address: Passed
+            Email: {email} {email_check}
+            Phone: {phone} {phone_check}
+            Government System database Check: {gsd_check}
+            Turkish ID Latest: {id_check}
+            Selfie: {selfie_check}
+            Address: {address_check}
             Identification: Threshold: 70%, Confidence: {round(float(identification*100), 2)}%, {fail_or_success(identification, 70)}
             Document Liveness: Threshold: 70%, Confidence: {round(float(document_liveness*100), 2)}%, {fail_or_success(document_liveness, 70)}
             NFC: Threshold: 70%, Confidence: {round(float(nfc_check*100), 2)}%, {fail_or_success(nfc_check, 70)}
@@ -110,11 +110,11 @@ def add_questionnaire_data(purpose, amount_of_transaction, employment_status, na
 
 def ask_summarized_kyc_profile():
     prompt = "Can you summarize my KYC (Know Your Customer) profile, according to my KYC profile information?"
-    return prompt, "system_prompt_summary"
+    return prompt
 
 def ask_cdd_risk_analysis():
     prompt = "Can you perform CDD (Customer Due Diligence) risk analysis according to my KYC profile information and Questionnaire results?"
-    return prompt, "system_prompt_risk_analysis"
+    return prompt
 
 global extracted_ocrs
 extracted_ocrs = []
@@ -125,6 +125,7 @@ def add_text(history, text, image):
         image_upload_status = "You can load your image and get information from it..."
     if image is not None:
         ocr_text = pytesseract.image_to_string(Image.open(image))
+        ocr_text = ocr_text.replace("\n", "")
         if len(extracted_ocrs) != 0: 
             if ocr_text != extracted_ocrs[-1]:
                 extracted_ocrs.append(ocr_text)
@@ -150,12 +151,12 @@ def load_prompts():
         data = json.load(file)
     return data
 
-def generate(history, prompt_key):
+def generate(history):
     print("Generating response...")
     # Use your existing system_prompt here
     # PROMPT ENGINEERING
     prompts = load_prompts()
-    system_prompt = prompts[prompt_key]
+    system_prompt = prompts["system_prompt"]
     message = history[-1][0]
     formatted_prompt = [{"role": "system", "content": system_prompt}]
 
@@ -183,8 +184,6 @@ with gr.Blocks(css=css) as demo:
                     image_upload_status = gr.Textbox(label="Status", placeholder="", interactive=False)
                 add_kyc_information = gr.Button("Add KYC Information")
                 add_questionnaire_information = gr.Button("Add questionnaire results")
-                summarize_btn = gr.Button("Summarize KYC profile")
-                risk_analysis_btn = gr.Button("Create CDD risk analysis")
                 with gr.Column():
                     with gr.Accordion("KYC inputs", open=False) as kyc_row:
                             identification = gr.Slider(minimum=0.0, maximum=1.0, value=0.9, step=0.01, interactive=True, label="Idetification Confidence")
@@ -193,6 +192,14 @@ with gr.Blocks(css=css) as demo:
                             biometrics_check = gr.Slider(minimum=0.0, maximum=1.0, value=1.0, step=0.01, interactive=True, label="Biometrics Check Confidence")
                             biometric_liveness = gr.Slider(minimum=0.0, maximum=1.0, value=0.85, step=0.01, interactive=True, label="Biometrics Liveness Confidence")
                             face_match = gr.Slider(minimum=0.0, maximum=1.0, value=0.89, step=0.01, interactive=True, label="Face Match Confidence")
+                            email = gr.Textbox(label="e-mail", value="woskiva@sharklasers.com")
+                            email_check = gr.Textbox(label="e-mail check", value="passed")
+                            phone = gr.Textbox(label="Phone", value="+905352961076")
+                            phone_check = gr.Textbox(label="Phone verification", value="passed")
+                            gsd_check = gr.Textbox(label="Government System Database Check", value="passed")
+                            id_check = gr.Textbox(label="ID Check", value="passed")
+                            selfie_check = gr.Textbox(label="Selfie Check", value="passed")
+                            address_check = gr.Textbox(label="Address Check", value="passed")
                             ip_address = gr.Textbox(label="IP Address", value="198.52.129.197")
                             device = gr.Textbox(label="Device", value="ID4b973ac37effd84b")
                             os_ph = gr.Textbox(label="Operating System", value="android")
@@ -224,24 +231,17 @@ with gr.Blocks(css=css) as demo:
             # pipeline
         with gr.Column(elem_id="example-questions", scale=5): 
             gr.Examples(examples=[["./example_documents/bas.jpg", "Can you give me the addres of this document's owner?"], ["./example_documents/PHL_ID_0_F.png", "Can you summarize this document for me?"] ], inputs=[image_upload, txt])
-    prompt_key = gr.Textbox(value="system_prompt", container=False, visible=False)
     txt_msg = txt.submit(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+        generate, chatbot, chatbot, api_name="bot_response"
     )
     txt_msg = submit_btn.click(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+        generate, chatbot, chatbot, api_name="bot_response"
     )
-    add_kyc_information.click(add_kyc_data, [identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+    add_kyc_information.click(add_kyc_data, [email, email_check, phone, phone_check, gsd_check, id_check, selfie_check, address_check, identification, document_liveness, nfc_check, biometrics_check, biometric_liveness, face_match, ip_address, device, os_ph, brand, latitude, longtitude], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
+        generate, chatbot, chatbot, api_name="bot_response"
     )
     add_questionnaire_information.click(add_questionnaire_data, [purpose, amount_of_transaction, employment_status, nationality, industry, payment_source, referred, pep_confirmation, platform, warning_confirmation], txt).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
-    )
-    summarize_btn.click(ask_summarized_kyc_profile, outputs=[txt, prompt_key]).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
-    )
-    risk_analysis_btn.click(ask_cdd_risk_analysis, outputs=[txt, prompt_key]).then(add_text, [chatbot, txt, image_upload], [chatbot, txt, image_upload_status], queue=False).then(
-        generate, [chatbot, prompt_key], chatbot, api_name="bot_response"
+        generate, chatbot, chatbot, api_name="bot_response"
     )
 
 demo.queue()
